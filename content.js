@@ -304,17 +304,68 @@ document.addEventListener('click', (e) => {
 });
 
 // --- HELPER: API (UPDATED FOR HEADERS) ---
+// --- HELPER: API (With Auto-Refresh) ---
 async function supabaseCall(endpoint, method, body = null, token = null, customHeaders = {}) {
-    return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage({ 
-            action: "SUPABASE_REQ", 
-            payload: { endpoint, method, body, token, headers: customHeaders } 
-        }, (response) => {
-            if (chrome.runtime.lastError) return;
-            if (response && response.success) resolve(response.data);
-            else reject(new Error(response ? response.error : "Unknown Error"));
+
+    // 1. Internal helper to perform the actual request
+    const performRequest = (currentToken) => {
+        return new Promise((resolve, reject) => {
+            chrome.runtime.sendMessage({
+                action: "SUPABASE_REQ",
+                payload: { endpoint, method, body, token: currentToken, headers: customHeaders }
+            }, (response) => {
+                if (chrome.runtime.lastError) return reject(new Error("Extension error"));
+                if (response && response.success) resolve(response.data);
+                else reject(new Error(response ? response.error : "Unknown Error"));
+            });
         });
-    });
+    };
+
+    try {
+        // 2. Try the request normally
+        return await performRequest(token);
+    } catch (err) {
+        // DEBUG: See exactly what Supabase said
+        console.log("Supabase Request Failed:", err.message);
+
+        // 3. DETECT AUTH ERRORS (Updated to catch "Invalid token")
+        const msg = err.message.toLowerCase();
+        const isAuthError =
+            msg.includes("jwt") ||
+            msg.includes("token") ||   // <--- Added this
+            msg.includes("401") ||
+            msg.includes("unauthorized") ||
+            msg.includes("invalid");   // <--- Added this
+
+        if (isAuthError && userSession && userSession.refresh_token) {
+            console.log("Auth error detected. Attempting to refresh token...");
+
+            // 4. Attempt to refresh the session
+            const newSession = await new Promise((resolve) => {
+                chrome.runtime.sendMessage({
+                    action: "REFRESH_SESSION",
+                    refresh_token: userSession.refresh_token
+                }, (response) => resolve(response && response.success ? response.data : null));
+            });
+
+            if (newSession) {
+                // 5. Success! Save new session and retry
+                console.log("Token refreshed successfully!");
+                userSession = newSession;
+                chrome.storage.local.set({ sb_session: newSession });
+
+                // Retry with new access token
+                return await performRequest(newSession.access_token);
+            } else {
+                // 6. Refresh failed (Refresh token might be expired too)
+                console.error("Refresh failed. Logging out.");
+                handleLogout(dockHost.shadowRoot);
+                throw new Error("Session expired. Please sign in again.");
+            }
+        }
+
+        throw err; // Throw other errors normally (e.g., "Network Error")
+    }
 }
 
 // --- INIT ---
@@ -362,9 +413,9 @@ function setupUI(shadow) {
                 userSession = response.data;
                 chrome.storage.local.set({ sb_session: response.data });
                 updateMenuState(shadow);
-                
+
                 // Fetch theme from cloud after Google login
-                fetchThemeFromCloud(shadow); 
+                fetchThemeFromCloud(shadow);
             } else {
                 errorMsg.innerText = response.error || "Google Sign-in failed";
                 errorMsg.style.color = "#ff5b5b";
@@ -375,7 +426,7 @@ function setupUI(shadow) {
     addListener('toggle-auth-btn', 'click', () => toggleAuthMode(shadow));
     addListener('auth-btn', 'click', () => handleAuth(shadow));
     addListener('logout-btn', 'click', () => handleLogout(shadow));
-    
+
     // Theme Toggle Listener
     addListener('theme-toggle', 'change', (e) => setTheme(shadow, e.target.checked));
 
@@ -399,12 +450,28 @@ function setupUI(shadow) {
 
 async function toggleDock() {
     await initDock();
-    const dock = dockHost.shadowRoot.getElementById('dock-container');
+    const shadow = dockHost.shadowRoot;
+    const dock = shadow.getElementById('dock-container');
+    const menu = shadow.getElementById('dock-menu'); // Get the menu element
+
     if (!dock) return;
+
     if (dock.classList.contains('active')) {
-        dock.classList.remove('active'); dockHost.style.pointerEvents = "none";
+        // --- CLOSING THE DOCK ---
+        dock.classList.remove('active');
+        dockHost.style.pointerEvents = "none";
+
+        // FIX: Hide the menu immediately when closing the dock
+        if (menu) menu.style.display = 'none';
+
     } else {
-        dock.classList.add('active'); dockHost.style.pointerEvents = "auto";
+        // --- OPENING THE DOCK ---
+        dock.classList.add('active');
+        dockHost.style.pointerEvents = "auto";
+
+        // FIX: Ensure menu starts closed when opening (Double safety)
+        if (menu) menu.style.display = 'none';
+
         if (userSession) loadBookmarks(dockHost.shadowRoot);
     }
 }
@@ -446,9 +513,9 @@ async function handleAuth(shadow) {
         userSession = data;
         chrome.storage.local.set({ sb_session: data });
         updateMenuState(shadow);
-        
+
         // Fetch theme from cloud after email/pass login
-        fetchThemeFromCloud(shadow); 
+        fetchThemeFromCloud(shadow);
 
     } catch (err) {
         errorMsg.innerText = err.message;
@@ -462,7 +529,7 @@ async function checkSession(shadow) {
             if (result.sb_session?.access_token) {
                 userSession = result.sb_session;
                 // If we have a session on load, fetch the theme
-                fetchThemeFromCloud(shadow); 
+                fetchThemeFromCloud(shadow);
             }
             updateMenuState(shadow); resolve();
         });
@@ -496,15 +563,13 @@ async function saveThemeToCloud(isDark) {
         const themeValue = isDark ? 'dark' : 'light';
         // Needs "Prefer: resolution=merge-duplicates" header for Upsert to work on ID conflict
         const headers = { "Prefer": "resolution=merge-duplicates" };
-        
+
         await supabaseCall('/rest/v1/profiles', 'POST', {
             id: userSession.user.id,
             theme: themeValue
         }, userSession.access_token, headers);
-        
-    } catch (err) {
-        console.error("Failed to save theme to cloud:", err);
-    }
+
+    } catch (err) { }
 }
 
 // 2. Fetch from Cloud
@@ -512,27 +577,25 @@ async function fetchThemeFromCloud(shadow) {
     if (!userSession) return;
     try {
         const data = await supabaseCall(`/rest/v1/profiles?id=eq.${userSession.user.id}&select=theme`, 'GET', null, userSession.access_token);
-        
+
         if (data && data.length > 0) {
             const cloudTheme = data[0].theme;
             const isDark = cloudTheme === 'dark';
-            
+
             // Update UI and Local Storage to match Cloud
             const toggle = shadow.getElementById('theme-toggle');
             if (toggle) toggle.checked = isDark;
-            
+
             setTheme(shadow, isDark, false); // false = don't save back to cloud (loop prevention)
         }
-    } catch (err) {
-        console.error("Failed to fetch theme:", err);
-    }
+    } catch (err) { }
 }
 
 // 3. Set Theme (UI + Local + Cloud)
 function setTheme(shadow, isDark, saveToDb = true) {
     const dock = shadow.getElementById('dock-container');
     if (!dock) return;
-    
+
     if (isDark) {
         dock.classList.add('dark-mode');
         chrome.storage.local.set({ theme: 'dark' });
@@ -540,7 +603,7 @@ function setTheme(shadow, isDark, saveToDb = true) {
         dock.classList.remove('dark-mode');
         chrome.storage.local.set({ theme: 'light' });
     }
-    
+
     // Only save to DB if user manually toggled it (not when fetching from DB)
     if (saveToDb && userSession) {
         saveThemeToCloud(isDark);
@@ -553,9 +616,9 @@ function loadTheme(shadow) {
         const isDark = result.theme === 'dark';
         const toggle = shadow.getElementById('theme-toggle');
         if (toggle) toggle.checked = isDark;
-        
+
         // Pass false so we don't spam the DB on every page load
-        setTheme(shadow, isDark, false); 
+        setTheme(shadow, isDark, false);
     });
 }
 
@@ -590,8 +653,6 @@ async function quickSaveLink() {
     toast.classList.add('show');
     try {
         await saveCurrentTab(shadow);
-    } catch (error) {
-        console.error("Save failed:", error);
     } finally {
         setTimeout(() => {
             toast.classList.remove('show');
@@ -632,7 +693,7 @@ async function saveNewOrder(shadow) {
     try {
         await supabaseCall('/rpc/update_bookmark_order', 'POST', { payload: updates }, userSession.access_token);
         console.log("Order saved");
-    } catch(err) { console.error("Failed save", err); }
+    } catch (err) { console.error("Failed save", err); }
 }
 
 async function loadBookmarks(shadow) {
@@ -700,5 +761,5 @@ async function loadBookmarks(shadow) {
 
             container.appendChild(iconDiv);
         });
-    } catch (err) { console.error("Load failed:", err); }
+    } catch (err) { }
 }

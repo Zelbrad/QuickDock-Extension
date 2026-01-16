@@ -31,7 +31,7 @@ chrome.commands.onCommand.addListener((command) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (command === "toggle-dock") {
             toggleDock(tabs[0]);
-        } 
+        }
         else if (command === "quick-save") {
             if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, { action: "quick_save" });
         }
@@ -80,18 +80,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true;
     }
 
+    // --- NEW: Token Refresh Handler ---
+    if (request.action === "REFRESH_SESSION") {
+        const { refresh_token } = request;
+        const refreshUrl = `${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`;
+
+        fetch(refreshUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "apikey": SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({ refresh_token })
+        })
+            .then(async (res) => {
+                const data = await res.json();
+                if (res.ok) sendResponse({ success: true, data });
+                else sendResponse({ success: false, error: data.error_description || "Refresh failed" });
+            })
+            .catch(err => sendResponse({ success: false, error: err.message }));
+
+        return true;
+    }
+
     // Supabase Request Proxy (UPDATED for Theme Sync Headers)
     if (request.action === "SUPABASE_REQ") {
         // We now extract 'headers' from the payload to support Upserting
         const { endpoint, method, body, token, headers: customHeaders } = request.payload;
-        
+
         // Merge default headers with any custom headers passed from content.js
-        const headers = { 
-            "Content-Type": "application/json", 
+        const headers = {
+            "Content-Type": "application/json",
             "apikey": SUPABASE_ANON_KEY,
-            ...customHeaders 
+            ...customHeaders
         };
-        
+
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         fetch(`${SUPABASE_URL}${endpoint}`, {

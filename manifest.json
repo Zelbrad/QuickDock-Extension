@@ -29,19 +29,28 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_end"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["sidebar.html", "sidebar.css"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "sidebar.html",
+        "sidebar.css"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "commands": {
-    "toggle-dock": { 
+    "toggle-dock": {
       "suggested_key": {
         "default": "Alt+Q",
         "mac": "Alt+Q"
