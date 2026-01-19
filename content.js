@@ -1,3 +1,5 @@
+// --- content.js ---
+
 // --- 1. THE UI HTML (Unchanged) ---
 const UI_HTML = `
 <div id="dock-container">
@@ -303,44 +305,30 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// --- HELPER: API (UPDATED FOR HEADERS) ---
-// --- HELPER: API (With Auto-Refresh) ---
+// --- HELPER: JWT DECODER ---
+function isTokenExpired(token) {
+    if (!token) return true;
+    try {
+        // Decode the payload of the JWT (the middle part)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const expiry = payload.exp * 1000; // Convert to milliseconds
+        const now = Date.now();
+
+        // Return true if it expires in less than 5 minutes (buffer time)
+        return now > (expiry - 5 * 60 * 1000);
+    } catch (e) {
+        return true; // If we can't read it, assume it's expired
+    }
+}
+
+// --- HELPER: API (Proactive Refresh) ---
 async function supabaseCall(endpoint, method, body = null, token = null, customHeaders = {}) {
 
-    // 1. Internal helper to perform the actual request
-    const performRequest = (currentToken) => {
-        return new Promise((resolve, reject) => {
-            chrome.runtime.sendMessage({
-                action: "SUPABASE_REQ",
-                payload: { endpoint, method, body, token: currentToken, headers: customHeaders }
-            }, (response) => {
-                if (chrome.runtime.lastError) return reject(new Error("Extension error"));
-                if (response && response.success) resolve(response.data);
-                else reject(new Error(response ? response.error : "Unknown Error"));
-            });
-        });
-    };
+    // 1. Check if token is expired BEFORE we send the request
+    if (userSession && userSession.refresh_token && isTokenExpired(userSession.access_token)) {
+        console.log("Token is expiring soon. Refreshing proactively...");
 
-    try {
-        // 2. Try the request normally
-        return await performRequest(token);
-    } catch (err) {
-        // DEBUG: See exactly what Supabase said
-        console.log("Supabase Request Failed:", err.message);
-
-        // 3. DETECT AUTH ERRORS (Updated to catch "Invalid token")
-        const msg = err.message.toLowerCase();
-        const isAuthError =
-            msg.includes("jwt") ||
-            msg.includes("token") ||   // <--- Added this
-            msg.includes("401") ||
-            msg.includes("unauthorized") ||
-            msg.includes("invalid");   // <--- Added this
-
-        if (isAuthError && userSession && userSession.refresh_token) {
-            console.log("Auth error detected. Attempting to refresh token...");
-
-            // 4. Attempt to refresh the session
+        try {
             const newSession = await new Promise((resolve) => {
                 chrome.runtime.sendMessage({
                     action: "REFRESH_SESSION",
@@ -349,23 +337,31 @@ async function supabaseCall(endpoint, method, body = null, token = null, customH
             });
 
             if (newSession) {
-                // 5. Success! Save new session and retry
-                console.log("Token refreshed successfully!");
+                console.log("Token refreshed!");
                 userSession = newSession;
                 chrome.storage.local.set({ sb_session: newSession });
-
-                // Retry with new access token
-                return await performRequest(newSession.access_token);
+                token = newSession.access_token; // Use the new token for this request
             } else {
-                // 6. Refresh failed (Refresh token might be expired too)
-                console.error("Refresh failed. Logging out.");
+                console.log("Refresh failed. User must sign in.");
                 handleLogout(dockHost.shadowRoot);
-                throw new Error("Session expired. Please sign in again.");
+                throw new Error("Session expired");
             }
+        } catch (e) {
+            console.error("Auto-refresh failed:", e);
         }
-
-        throw err; // Throw other errors normally (e.g., "Network Error")
     }
+
+    // 2. Perform Request (Now using a fresh token if needed)
+    return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({
+            action: "SUPABASE_REQ",
+            payload: { endpoint, method, body, token: token, headers: customHeaders }
+        }, (response) => {
+            if (chrome.runtime.lastError) return reject(new Error("Extension error"));
+            if (response && response.success) resolve(response.data);
+            else reject(new Error(response ? response.error : "Unknown Error"));
+        });
+    });
 }
 
 // --- INIT ---
@@ -434,8 +430,6 @@ function setupUI(shadow) {
     addListener('btn-delete', 'click', async (e) => {
         e.stopPropagation();
 
-        console.log("Delete clicked. ID:", activeContextMenuId);
-
         if (activeContextMenuId) {
             const ctxMenu = shadow.getElementById('ctx-menu');
             if (ctxMenu) ctxMenu.style.display = 'none';
@@ -443,7 +437,7 @@ function setupUI(shadow) {
             await deleteBookmark(activeContextMenuId);
             loadBookmarks(shadow);
         } else {
-            console.error("No activeContextMenuId found!");
+            // silenced console.error
         }
     });
 }
@@ -498,10 +492,22 @@ async function handleAuth(shadow) {
             data = await supabaseCall('/auth/v1/signup', 'POST', { email, password });
 
             if (!data.access_token && data.user) {
-                errorMsg.innerText = `Confirmation sent to ${email}. Verify, then Sign In.`;
-                errorMsg.style.color = "#4bb71b";
-                toggleAuthMode(shadow);
+                // --- NEW UX MESSAGE STARTS HERE ---
+                errorMsg.innerHTML = `
+                    Confirmation sent to <b>${email}</b>.<br>
+                    <span style="font-size:11px; opacity:0.8; display:block; margin-top:4px;">
+                        Check Spam/Promotions.<br>
+                        (May take 1-2 mins for new accounts)
+                    </span>
+                `;
+                errorMsg.style.color = "#4bb71b"; // Green
+                errorMsg.style.lineHeight = "1.4";
+
+                // We COMMENT OUT this line so they stay on the screen and read the message
+                // toggleAuthMode(shadow); 
+
                 return;
+                // --- NEW UX MESSAGE ENDS HERE ---
             }
         } else {
             data = await supabaseCall('/auth/v1/token?grant_type=password', 'POST', { email, password });
@@ -677,11 +683,9 @@ async function saveCurrentTab(shadow) {
 async function deleteBookmark(id) {
     if (!userSession) return;
     try {
-        console.log("Attempting to delete ID:", id);
         await supabaseCall(`/rest/v1/bookmarks?id=eq.${id}`, 'DELETE', null, userSession.access_token);
-        console.log("Delete successful");
     } catch (err) {
-        console.error("Delete failed:", err);
+        // silenced console.error
     }
 }
 
@@ -692,8 +696,7 @@ async function saveNewOrder(shadow) {
     const updates = icons.map((icon, index) => ({ id: icon.dataset.id, order_index: index }));
     try {
         await supabaseCall('/rpc/update_bookmark_order', 'POST', { payload: updates }, userSession.access_token);
-        console.log("Order saved");
-    } catch (err) { console.error("Failed save", err); }
+    } catch (err) { /* silenced */ }
 }
 
 async function loadBookmarks(shadow) {
@@ -729,7 +732,6 @@ async function loadBookmarks(shadow) {
             iconDiv.addEventListener('contextmenu', (e) => {
                 e.preventDefault(); e.stopPropagation();
                 activeContextMenuId = bm.id;
-                console.log("Active Context Menu ID set:", activeContextMenuId);
                 if (ctxMenu) {
                     ctxMenu.style.display = 'block';
                     ctxMenu.style.left = `${e.clientX}px`;
