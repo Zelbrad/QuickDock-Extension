@@ -52,8 +52,8 @@
   "commands": {
     "toggle-dock": {
       "suggested_key": {
-        "default": "Alt+Q",
-        "mac": "Alt+Q"
+        "default": "Alt+W",
+        "mac": "Alt+W"
       },
       "description": "Toggle Dock"
     },

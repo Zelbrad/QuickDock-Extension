@@ -51,6 +51,34 @@ const UI_HTML = `
             </div>
             <button id="logout-btn">Log Out</button>
         </div>
+        </div>
+    </div>
+</div>
+
+<div id="tutorial-popup">
+    <div class="tut-slider">
+        <!-- Slide 1 -->
+        <div class="tut-slide">
+            <h2>Welcome to QuickDock! 🚀</h2>
+            <p>Your new productivity companion is here.</p>
+            <ul>
+                <li><b>Alt + W</b> or click icon to toggle.</li>
+                <li><b>Alt + R</b> to quick save a link.</li>
+                <li>Drag & Drop icons to reorganize.</li>
+            </ul>
+            <button id="tut-next-btn">Next</button>
+        </div>
+        
+        <!-- Slide 2 -->
+        <div class="tut-slide">
+            <h2>Sync & Visualize 🎨</h2>
+            <p>Unlock the full power of QuickDock:</p>
+            <ul>
+                <li><b>Sign In</b> to sync your shortcuts across devices.</li>
+                <li><b>Theme Toggle</b> inside the menu to switch Light/Dark mode.</li>
+            </ul>
+            <button id="close-tutorial-btn">Let's Go!</button>
+        </div>
     </div>
 </div>
 <div id="ctx-menu"><div id="btn-delete">Delete</div></div>
@@ -112,19 +140,67 @@ const UI_CSS = `
 }
 
 #dock-container.active { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0) scale(1); }
-#dock-icons { display: flex; align-items: center; gap: 14px; }
+#dock-icons { 
+    display: flex; align-items: center; gap: 14px; 
+    max-width: 640px; /* ~10 icons */
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 10px; /* More horizontal padding for mask */
+    scroll-behavior: smooth;
+    /* Hide Scrollbar */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* Fade Edges Mask */
+    mask-image: linear-gradient(to right, transparent, black 15px, black calc(100% - 15px), transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 15px, black calc(100% - 15px), transparent);
+}
+#dock-icons::-webkit-scrollbar { display: none; } /* Chrome/Safari */
 
 .dock-item {
     width: var(--icon-size); height: var(--icon-size); border-radius: 16px; cursor: pointer;
     transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
     display: flex; align-items: center; justify-content: center; user-select: none;
     position: relative; overflow: hidden; 
+    flex-shrink: 0; /* Prevent icons from shrinking */
+    touch-action: none; /* Prevent scrolling while dragging on touch */
+}
+
+/* Force grabbing cursor when active/dragging */
+:host(.grabbing-cursor), .grabbing-cursor {
+    cursor: grabbing !important;
+}
+/* Ensure children also respect grabbing */
+:host(.grabbing-cursor) *, .grabbing-cursor * {
+    cursor: grabbing !important;
 }
 .dock-item img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; border-radius: 16px; }
+
 .dock-item:hover { transform: translateY(-4px) scale(1.05); z-index: 10; }
 #settings-icon:hover { transform: translateY(0) scale(1.05); }
-.dock-item:active { cursor: pointer; transform: scale(0.95); }
-.dock-item.dragging { opacity: 0.5; cursor: pointer; transform: scale(1.05); }
+.dock-item:active { cursor: grabbing; transform: scale(0.95); }
+
+/* DRAGGING STATES */
+.dock-item.dragging-placeholder {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.95);
+}
+
+.dock-item.dragging-clone {
+    position: fixed;
+    pointer-events: none;
+    z-index: 2147483650; /* Above everything */
+    transform: scale(1.1);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+    opacity: 0.9;
+    will-change: left, top;
+    transition: none; /* No transition for immediate cursor following */
+}
+
+/* FLIP animation class */
+.dock-item.flip-animate {
+    transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+}
 
 .settings-svg {
     width: 30px; height: 30px; color: rgba(255, 255, 255, 0.9);
@@ -233,6 +309,71 @@ const UI_CSS = `
     display: flex; align-items: center; justify-content: space-between; padding: 3px;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
 }
+
+/* --- TUTORIAL POPUP --- */
+#tutorial-popup {
+    position: fixed; /* Fixed relative to viewport */
+    /* Vertical: Bottom aligned with dock base */
+    bottom: 43% !important; 
+    left: auto !important;
+    width: 420px; /* Much Wider */
+    box-sizing: border-box; 
+    overflow: hidden; /* Strict clipping */
+
+    /* Default Light Mode */
+    background-color: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #222 !important;
+
+    border-radius: 12px; /* Slightly sharper radius */
+    padding: 0; 
+    display: none;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+    animation: fadeIn 0.4s ease-out;
+    z-index: 2147483650 !important;
+    pointer-events: auto;
+}
+
+.tut-slider {
+    display: flex;
+    width: 100%; /* Slider matches wrapper width */
+    margin: 0; padding: 0;
+    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.tut-slide {
+    width: 100%; /* Slide matches wrapper width exactly */
+    flex-shrink: 0; 
+    padding: 10px 25px; /* Minimal Padding */
+    box-sizing: border-box;
+}
+
+/* Force Gap between slides to prevent bleeding */
+.tut-slide:first-child {
+    margin-right: 200px; 
+}
+
+#tutorial-popup.dark-mode {
+    background-color: rgba(30, 30, 35, 0.85) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: white !important;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+#tutorial-popup h2 { margin: 0 0 8px 0; font-size: 16px; color: inherit; display: block; font-weight: 700; }
+#tutorial-popup p { margin: 0 0 12px 0; font-size: 13px; opacity: 0.9; line-height: 1.4; display: block; color: inherit; }
+#tutorial-popup ul { padding-left: 20px; margin: 0 0 16px 0; font-size: 13px; opacity: 0.9; line-height: 1.5; display: block; color: inherit; }
+#tutorial-popup li { margin-bottom: 6px; }
+#tutorial-popup button {
+    width: 100%; padding: 10px; background: var(--accent-color); color: white;
+    border: none; border-radius: 10px; font-weight: 600; cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+}
+#tutorial-popup button:hover { opacity: 0.9; }
+#tutorial-popup button:active { transform: scale(0.98); }
 .slider::before {
     content: ""; position: absolute; height: 20px; width: 20px;
     left: 3px; bottom: 3px; background-color: white;
@@ -266,6 +407,32 @@ input:checked + .slider .icon-moon { opacity: 1; color: #fff; }
 .dark-mode #google-btn { background: #2d2d33; color: white; }
 .dark-mode #google-btn:hover { background: rgba(47, 44, 44, 0.1); }
 
+/* --- TUTORIAL POPUP --- */
+#tutorial-popup {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 320px; background: var(--glass-bg); backdrop-filter: blur(24px);
+    border: 1px solid var(--glass-border); border-radius: 24px;
+    padding: 24px; text-align: center; z-index: 2147483650;
+    color: #333; display: none;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    animation: menuPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+#tutorial-popup h2 { margin-top: 0; font-size: 20px; margin-bottom: 12px; color: inherit; }
+#tutorial-popup p { font-size: 14px; opacity: 0.8; margin-bottom: 20px; line-height: 1.5; color: inherit; }
+#tutorial-popup ul { text-align: left; font-size: 13px; opacity: 0.9; padding-left: 20px; margin-bottom: 24px; line-height: 1.8; color: inherit; }
+#tutorial-popup button {
+    width: 100%; padding: 12px; background: var(--accent-color); color: white;
+    border: none; border-radius: 12px; font-weight: 600; cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+}
+#tutorial-popup button:hover { opacity: 0.9; }
+#tutorial-popup button:active { transform: scale(0.98); }
+
+.dark-mode #tutorial-popup { 
+    background: rgba(20, 20, 25, 0.95); 
+    border-color: rgba(255,255,255,0.08); 
+    color: white;
+}
 `;
 
 // --- STATE ---
@@ -298,7 +465,9 @@ document.addEventListener('click', (e) => {
             menu.style.display = 'none';
 
         const dock = shadow.getElementById('dock-container');
-        if (dock && dock.classList.contains('active') && !path.includes(dock) && !path.includes(ctxMenu)) {
+        const tutorial = shadow.getElementById('tutorial-popup');
+
+        if (dock && dock.classList.contains('active') && !path.includes(dock) && !path.includes(ctxMenu) && !path.includes(tutorial)) {
             dock.classList.remove('active');
             dockHost.style.pointerEvents = "none";
         }
@@ -440,6 +609,30 @@ function setupUI(shadow) {
             // silenced console.error
         }
     });
+
+    addListener('close-tutorial-btn', 'click', () => {
+        const tut = shadow.getElementById('tutorial-popup');
+        if (tut) tut.style.display = 'none';
+        chrome.storage.local.set({ tutorial_shown: true });
+    });
+
+    // Slides (Translate -100% - 200px margin for gap)
+    addListener('tut-next-btn', 'click', () => {
+        const slider = shadow.querySelector('.tut-slider');
+        if (slider) slider.style.transform = 'translateX(calc(-100% - 200px))';
+    });
+
+    // Horizontal Scroll Support
+    const dockIcons = shadow.getElementById('dock-icons');
+    if (dockIcons) {
+        dockIcons.addEventListener('wheel', (e) => {
+            // Convert vertical scroll to horizontal scroll
+            if (e.deltaY !== 0) {
+                e.preventDefault();
+                dockIcons.scrollLeft += e.deltaY;
+            }
+        }, { passive: false });
+    }
 }
 
 async function toggleDock() {
@@ -458,6 +651,10 @@ async function toggleDock() {
         // FIX: Hide the menu immediately when closing the dock
         if (menu) menu.style.display = 'none';
 
+        // Hide Tutorial when dock closes
+        const tut = shadow.getElementById('tutorial-popup');
+        if (tut) tut.style.display = 'none';
+
     } else {
         // --- OPENING THE DOCK ---
         dock.classList.add('active');
@@ -467,6 +664,35 @@ async function toggleDock() {
         if (menu) menu.style.display = 'none';
 
         if (userSession) loadBookmarks(dockHost.shadowRoot);
+
+        // Check for Tutorial with DELAY
+        chrome.storage.local.get(['tutorial_shown'], (res) => {
+            // Force show for testing if needed, or check flag
+            // if (!res.tutorial_shown) { 
+            const tut = shadow.getElementById('tutorial-popup');
+            const dockRef = shadow.getElementById('dock-container');
+
+            if (tut && dockRef) {
+                // Wait for dock animation (300ms) + extra buffer
+                setTimeout(() => {
+                    const rect = dockRef.getBoundingClientRect();
+
+                    tut.style.visibility = 'hidden';
+                    tut.style.display = 'block';
+
+                    // Position relative to viewport edges
+                    // Horizontal: Right aligned with right of dock
+                    const distFromRight = window.innerWidth - rect.right;
+
+                    tut.style.right = distFromRight + 'px';
+                    tut.style.left = 'auto';
+                    tut.style.top = 'auto';  // Reset
+
+                    tut.style.visibility = 'visible';
+                }, 1000); // 1 Second Delay
+            }
+            // }
+        });
     }
 }
 
@@ -600,13 +826,16 @@ async function fetchThemeFromCloud(shadow) {
 // 3. Set Theme (UI + Local + Cloud)
 function setTheme(shadow, isDark, saveToDb = true) {
     const dock = shadow.getElementById('dock-container');
+    const tutorial = shadow.getElementById('tutorial-popup');
     if (!dock) return;
 
     if (isDark) {
         dock.classList.add('dark-mode');
+        if (tutorial) tutorial.classList.add('dark-mode');
         chrome.storage.local.set({ theme: 'dark' });
     } else {
         dock.classList.remove('dark-mode');
+        if (tutorial) tutorial.classList.remove('dark-mode');
         chrome.storage.local.set({ theme: 'light' });
     }
 
@@ -720,14 +949,54 @@ async function loadBookmarks(shadow) {
             const betterIconUrl = `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=${encodeURIComponent(bm.url)}&size=128`;
             iconDiv.innerHTML = `<img src="${betterIconUrl}" onerror="this.src='https://www.google.com/s2/favicons?domain=google.com'"/>`;
 
-            iconDiv.addEventListener('click', () => window.location.href = bm.url);
+            // CLICK + DRAG LOGIC
+            iconDiv.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return; // Only left click
+
+                // Prevent default drag to avoid conflicts
+                e.preventDefault();
+
+                // Initial state
+                const startX = e.clientX;
+                const startY = e.clientY;
+                let hasMoved = false;
+
+                const onMoveInit = (ev) => {
+                    const dx = ev.clientX - startX;
+                    const dy = ev.clientY - startY;
+                    // Threshold of 5px to detect intentional drag
+                    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                        hasMoved = true;
+                        cleanupInit();
+                        startDrag(shadow, iconDiv, startX, startY);
+                    }
+                };
+
+                const onUpInit = (ev) => {
+                    cleanupInit();
+                    // If we haven't moved, treat it as a click
+                    if (!hasMoved) {
+                        if (ev.button === 0) window.location.href = bm.url;
+                    }
+                };
+
+                const cleanupInit = () => {
+                    window.removeEventListener('mousemove', onMoveInit);
+                    window.removeEventListener('mouseup', onUpInit);
+                };
+
+                window.addEventListener('mousemove', onMoveInit);
+                window.addEventListener('mouseup', onUpInit);
+            });
 
             iconDiv.addEventListener('auxclick', (e) => {
                 if (e.button === 1) window.open(bm.url, '_blank');
             });
-            iconDiv.addEventListener('mousedown', (e) => {
-                if (e.button === 1) e.preventDefault();
-            });
+
+            /* 
+             * Note: removed 'click' listener because we handle it in mouseup 
+             * inside mousedown logic to disambiguate from drag.
+             */
 
             iconDiv.addEventListener('contextmenu', (e) => {
                 e.preventDefault(); e.stopPropagation();
@@ -739,29 +1008,227 @@ async function loadBookmarks(shadow) {
                 }
             });
 
-            iconDiv.addEventListener('dragstart', (e) => {
-                draggedItem = iconDiv;
-                e.dataTransfer.effectAllowed = 'move';
-                setTimeout(() => iconDiv.classList.add('dragging'), 0);
-            });
+            // MOUSE DOWN - Start Drag Logic
+            iconDiv.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return; // Only left click
 
-            iconDiv.addEventListener('dragend', () => {
-                draggedItem = null;
-                iconDiv.classList.remove('dragging');
-                saveNewOrder(shadow);
-            });
+                const startX = e.clientX;
+                const startY = e.clientY;
 
-            iconDiv.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                if (draggedItem !== iconDiv) {
-                    const rect = iconDiv.getBoundingClientRect();
-                    const next = (e.clientX - rect.left) / (rect.right - rect.left) > 0.5;
-                    container.insertBefore(draggedItem, next && iconDiv.nextSibling || iconDiv);
-                }
+                // Delay 150ms to distinguish click from drag
+                const dragTimeout = setTimeout(() => {
+                    startDrag(shadow, iconDiv, startX, startY);
+                }, 150);
+
+                const cancelClick = () => {
+                    clearTimeout(dragTimeout);
+                    iconDiv.removeEventListener('mouseup', cancelClick);
+                    iconDiv.removeEventListener('mouseleave', cancelClick);
+                };
+
+                iconDiv.addEventListener('mouseup', cancelClick);
+                iconDiv.addEventListener('mouseleave', cancelClick);
             });
 
             container.appendChild(iconDiv);
         });
     } catch (err) { }
+}
+
+// --- NEW DRAG & DROP SYSTEM (Pointer Events) ---
+let dragClone = null;
+let dragPlaceholder = null;
+let dragOffsetX = 0;
+let dragOffsetY = 0;
+let isDragging = false;
+
+function startDrag(shadow, item, startX, startY) {
+    if (isDragging) return;
+    isDragging = true;
+    dragPlaceholder = item;
+
+    const rect = item.getBoundingClientRect();
+    dragOffsetX = startX - rect.left;
+    dragOffsetY = startY - rect.top;
+
+    // Create Clone
+    dragClone = item.cloneNode(true);
+    dragClone.classList.add('dragging-clone');
+    dragClone.style.width = `${rect.width}px`;
+    dragClone.style.height = `${rect.height}px`;
+    dragClone.style.left = `${rect.left}px`;
+    dragClone.style.top = `${rect.top}px`;
+
+    // Append clone to dockHost (outside shadow to be safe, or inside shadow root)
+    // Appending to shadow root ensures styles are applied correctly
+    shadow.appendChild(dragClone);
+
+    // Style placeholder
+    item.classList.add('dragging-placeholder');
+
+    // Add global listeners (Use window + capture to ensure we don't miss events)
+    window.addEventListener('mousemove', onMouseMove, { capture: true });
+    window.addEventListener('mouseup', onMouseUp, { capture: true });
+
+    // Force Grabbing Cursor
+    document.body.style.cursor = 'grabbing';
+    const dockContainer = shadow.getElementById('dock-container');
+    if (dockContainer) dockContainer.classList.add('grabbing-cursor');
+    // Also set on shadow host if possible
+    shadow.host.classList.add('grabbing-cursor');
+
+    // Attach local references for the event handlers
+    dragClone.dataset.originId = item.dataset.id;
+}
+
+function onMouseMove(e) {
+    if (!isDragging || !dragClone) return;
+
+    // 1. Move Clone (Instant follow)
+    // Ensure no transition interferes with dragging
+    dragClone.style.transition = 'none';
+
+    // Calculate position relative to viewport (since fixed)
+    const x = e.clientX - dragOffsetX;
+    const y = e.clientY - dragOffsetY;
+
+    dragClone.style.left = `${x}px`;
+    dragClone.style.top = `${y}px`;
+
+    // 2. Detect Swap (FLIP)
+    const container = dragPlaceholder.parentElement;
+    const siblings = Array.from(container.children).filter(c => c !== dragPlaceholder && c.classList.contains('dock-item'));
+
+    // Find item under cursor (simple proximity check)
+    // Since it's a horizontal list, we check X overlap
+    const cloneCenter = x + dragClone.offsetWidth / 2;
+
+    // Find strictly where it belongs
+    // It belongs after the last item whose center is < cloneCenter
+    const itemsBefore = siblings.filter(s => {
+        const r = s.getBoundingClientRect();
+        return (r.left + r.width / 2) < cloneCenter;
+    });
+
+    const lastBefore = itemsBefore[itemsBefore.length - 1];
+
+    // Current position
+    const currentPrev = dragPlaceholder.previousElementSibling;
+
+    let shouldMove = false;
+    let moveTarget = null;
+    let movePos = null; // 'after' or 'before'
+
+    if (lastBefore) {
+        // We expect to be after 'lastBefore'
+        if (lastBefore !== currentPrev) {
+            shouldMove = true;
+            moveTarget = lastBefore;
+            movePos = 'after';
+        }
+    } else {
+        // We expect to be at the start (before all)
+        // If we are not already the first element (checking if prev is null or not a dock-item)
+        const firstSibling = siblings[0];
+        if (firstSibling && dragPlaceholder.nextElementSibling !== firstSibling) {
+            shouldMove = true;
+            moveTarget = firstSibling; // Insert before the first one
+            movePos = 'before';
+        }
+    }
+
+    if (shouldMove && moveTarget) {
+        // FLIP: FIRST - Record positions BEFORE DOM change
+        const allItems = Array.from(container.querySelectorAll('.dock-item'));
+        const positions = new Map();
+        allItems.forEach(el => positions.set(el, el.getBoundingClientRect()));
+
+        // DOM Update
+        if (movePos === 'after') {
+            moveTarget.after(dragPlaceholder);
+        } else {
+            if (moveTarget) container.insertBefore(dragPlaceholder, moveTarget);
+        }
+
+        // FLIP: INVERT & PLAY
+        allItems.forEach(el => {
+            if (el === dragPlaceholder) return; // Don't animate placeholder
+
+            const oldRect = positions.get(el);
+            const newRect = el.getBoundingClientRect();
+
+            if (oldRect && newRect) {
+                const dx = oldRect.left - newRect.left;
+
+                // Only animate if there moved significantly
+                if (Math.abs(dx) > 1) {
+                    // INVERT: Move back to old position instantly without animation
+                    el.style.transition = 'none';
+                    el.style.transform = `translateX(${dx}px)`;
+                    el.classList.remove('flip-animate');
+
+                    // Force Reflow
+                    el.offsetHeight;
+
+                    // PLAY: Animate to new position
+                    requestAnimationFrame(() => {
+                        // Restore transition
+                        el.style.transition = 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1)';
+                        el.style.transform = '';
+                    });
+                }
+            }
+        });
+    }
+}
+
+function onMouseUp(e) {
+    if (!isDragging) return;
+    isDragging = false;
+
+    // Stop listening
+    window.removeEventListener('mousemove', onMouseMove, { capture: true });
+    window.removeEventListener('mouseup', onMouseUp, { capture: true });
+
+    // Reset Cursor
+    document.body.style.cursor = '';
+    // We need to access the shadow root to remove the class
+    if (dragPlaceholder) {
+        const shadow = dragPlaceholder.getRootNode();
+        if (shadow) {
+            const dockContainer = shadow.getElementById('dock-container');
+            if (dockContainer) dockContainer.classList.remove('grabbing-cursor');
+            if (shadow.host) shadow.host.classList.remove('grabbing-cursor');
+        }
+    }
+
+    // Animate clone into placeholder
+    if (dragClone && dragPlaceholder) {
+        const destRect = dragPlaceholder.getBoundingClientRect();
+
+        dragClone.style.transition = 'all 0.4s cubic-bezier(0.25, 1, 0.5, 1)';
+        dragClone.style.left = `${destRect.left}px`;
+        dragClone.style.top = `${destRect.top}px`;
+        dragClone.style.transform = 'scale(1)';
+
+        setTimeout(() => {
+            if (dragClone) dragClone.remove();
+            if (dragPlaceholder) {
+                dragPlaceholder.classList.remove('dragging-placeholder');
+                // Clean styles
+                dragPlaceholder.style.transform = '';
+            }
+            dragClone = null;
+            dragPlaceholder = null;
+
+            // Save state
+            if (dockHost && dockHost.shadowRoot) saveNewOrder(dockHost.shadowRoot);
+        }, 400);
+    } else {
+        // Fallback
+        if (dragClone) dragClone.remove();
+        if (dragPlaceholder) dragPlaceholder.classList.remove('dragging-placeholder');
+        dragClone = null;
+        dragPlaceholder = null;
+    }
 }
