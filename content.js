@@ -56,29 +56,52 @@ const UI_HTML = `
 </div>
 
 <div id="tutorial-popup">
-    <div class="tut-slider">
-        <!-- Slide 1 -->
-        <div class="tut-slide">
-            <h2>Welcome to QuickDock! 🚀</h2>
-            <p>Your new productivity companion is here.</p>
-            <ul>
-                <li><b>Alt + W</b> or click icon to toggle.</li>
-                <li><b>Alt + R</b> to quick save a link.</li>
-                <li>Drag & Drop icons to reorganize.</li>
-            </ul>
-            <button id="tut-next-btn">Next</button>
-        </div>
+    <div class="tut-content-wrapper">
+        <h2 id="tut-title">Welcome to QuickDock! 🚀</h2>
+        <p id="tut-desc">A quick tutorial to get you started</p>
         
-        <!-- Slide 2 -->
-        <div class="tut-slide">
-            <h2>Sync & Visualize 🎨</h2>
-            <p>Unlock the full power of QuickDock:</p>
+        <!-- Step 1 Content -->
+        <div class="tut-step-content active" data-step="1">
             <ul>
-                <li><b>Sign In</b> to sync your shortcuts across devices.</li>
-                <li><b>Theme Toggle</b> inside the menu to switch Light/Dark mode.</li>
+                <li><b>Alt + Q</b> or click icon to toggle.</li>
+                <li><b>Alt + R</b> to quick save a link.</li>
             </ul>
-            <button id="close-tutorial-btn">Let's Go!</button>
         </div>
+        <!-- Step 2 Content -->
+        <div class="tut-step-content" data-step="2">
+             <ul>
+                <li>Drag & Drop icons to reorganize.</li>
+                <li>Sign In to sync across devices.</li>
+            </ul>
+        </div>
+        <!-- Step 3 Content -->
+        <div class="tut-step-content" data-step="3">
+            <p style="text-align:center;">You can also change the theme to match your style.</p>
+        </div>
+    </div>
+
+    <!-- Progress Indicator -->
+    <div class="tut-progress-container">
+        <div class="tut-track-dots">
+            <div class="tut-dot" data-index="1"></div>
+            <div class="tut-dot" data-index="2"></div>
+            <div class="tut-dot" data-index="3"></div>
+        </div>
+        <div class="tut-active-pill"></div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="tut-buttons">
+        <button id="tut-back-btn">Back</button>
+        <button id="tut-next-btn">
+            <span id="tut-btn-text">Continue</span>
+            <div id="tut-check-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9 12l2 2 4-4"></path>
+                </svg>
+            </div>
+        </button>
     </div>
 </div>
 <div id="ctx-menu"><div id="btn-delete">Delete</div></div>
@@ -145,7 +168,8 @@ const UI_CSS = `
     max-width: 640px; /* ~10 icons */
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 4px 10px; /* More horizontal padding for mask */
+    padding: 20px 10px 4px 10px; /* Top padding expanded for hover space */
+    margin-top: -16px; /* Negative margin pulls it back so dock size doesn't change */
     scroll-behavior: smooth;
     /* Hide Scrollbar */
     scrollbar-width: none;
@@ -163,6 +187,7 @@ const UI_CSS = `
     position: relative; overflow: hidden; 
     flex-shrink: 0; /* Prevent icons from shrinking */
     touch-action: none; /* Prevent scrolling while dragging on touch */
+    z-index: 1;
 }
 
 /* Force grabbing cursor when active/dragging */
@@ -175,7 +200,7 @@ const UI_CSS = `
 }
 .dock-item img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; border-radius: 16px; }
 
-.dock-item:hover { transform: translateY(-4px) scale(1.05); z-index: 10; }
+.dock-item:hover { transform: translateY(-4px) scale(1.05); z-index: 200; }
 #settings-icon:hover { transform: translateY(0) scale(1.05); }
 .dock-item:active { cursor: grabbing; transform: scale(0.95); }
 
@@ -303,92 +328,34 @@ const UI_CSS = `
 .theme-switch { position: relative; display: inline-block; width: 50px; height: 26px; flex-shrink: 0; }
 .theme-switch input { opacity: 0; width: 0; height: 0; }
 
+
 .slider {
     position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #e4e4e4; transition: .4s; border-radius: 34px;
-    display: flex; align-items: center; justify-content: space-between; padding: 3px;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+    background-color: #e4e4e4; 
+    transition: background-color 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); 
+    border-radius: 34px;
+    display: flex; align-items: center; justify-content: space-between; padding: 6px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
 }
 
-/* --- TUTORIAL POPUP --- */
-#tutorial-popup {
-    position: fixed; /* Fixed relative to viewport */
-    /* Vertical: Bottom aligned with dock base */
-    bottom: 43% !important; 
-    left: auto !important;
-    width: 420px; /* Much Wider */
-    box-sizing: border-box; 
-    overflow: hidden; /* Strict clipping */
+input:checked + .slider { background-color: #333; }
 
-    /* Default Light Mode */
-    background-color: rgba(255, 255, 255, 0.95) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    color: #222 !important;
-
-    border-radius: 12px; /* Slightly sharper radius */
-    padding: 0; 
-    display: none;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
-    animation: fadeIn 0.4s ease-out;
-    z-index: 2147483650 !important;
-    pointer-events: auto;
+/* Icons inside slider */
+.icon-sun, .icon-moon { 
+    width: 14px; height: 14px; z-index: 1; 
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); 
 }
 
-.tut-slider {
-    display: flex;
-    width: 100%; /* Slider matches wrapper width */
-    margin: 0; padding: 0;
-    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.tut-slide {
-    width: 100%; /* Slide matches wrapper width exactly */
-    flex-shrink: 0; 
-    padding: 10px 25px; /* Minimal Padding */
-    box-sizing: border-box;
-}
+/* Light Mode (Checked=False) */
+.icon-sun { color: #f59e0b; opacity: 1; transform: scale(1.3); }
+.icon-moon { color: #9ca3af; opacity: 0.5; transform: scale(0.9); }
 
-/* Force Gap between slides to prevent bleeding */
-.tut-slide:first-child {
-    margin-right: 200px; 
-}
+/* Dark Mode (Checked=True) */
+input:checked + .slider .icon-sun { opacity: 0.5; transform: scale(0.9); color: #9ca3af; }
+input:checked + .slider .icon-moon { opacity: 1; transform: scale(1.3); color: white; }
 
-#tutorial-popup.dark-mode {
-    background-color: rgba(30, 30, 35, 0.85) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: white !important;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
-}
 
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-#tutorial-popup h2 { margin: 0 0 8px 0; font-size: 16px; color: inherit; display: block; font-weight: 700; }
-#tutorial-popup p { margin: 0 0 12px 0; font-size: 13px; opacity: 0.9; line-height: 1.4; display: block; color: inherit; }
-#tutorial-popup ul { padding-left: 20px; margin: 0 0 16px 0; font-size: 13px; opacity: 0.9; line-height: 1.5; display: block; color: inherit; }
-#tutorial-popup li { margin-bottom: 6px; }
-#tutorial-popup button {
-    width: 100%; padding: 10px; background: var(--accent-color); color: white;
-    border: none; border-radius: 10px; font-weight: 600; cursor: pointer;
-    transition: transform 0.1s, opacity 0.2s;
-}
-#tutorial-popup button:hover { opacity: 0.9; }
-#tutorial-popup button:active { transform: scale(0.98); }
-.slider::before {
-    content: ""; position: absolute; height: 20px; width: 20px;
-    left: 3px; bottom: 3px; background-color: white;
-    transition: .4s; border-radius: 50%;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.2); z-index: 2;
-}
-input:checked + .slider { background-color: #3b3b4f; }
-input:checked + .slider::before { transform: translateX(24px); }
-
-.slider svg { width: 14px; height: 14px; z-index: 1; transition: opacity 0.3s; }
-.icon-sun { color: #f59e0b; margin-left: 2px; }
-.icon-moon { color: #fbbf24; margin-right: 2px; opacity: 0.5; }
-
-input:checked + .slider .icon-sun { opacity: 0.5; color: #9ca3af; }
-input:checked + .slider .icon-moon { opacity: 1; color: #fff; }
 
 /* Dark Mode Overrides */
 .dark-mode {
@@ -407,32 +374,119 @@ input:checked + .slider .icon-moon { opacity: 1; color: #fff; }
 .dark-mode #google-btn { background: #2d2d33; color: white; }
 .dark-mode #google-btn:hover { background: rgba(47, 44, 44, 0.1); }
 
-/* --- TUTORIAL POPUP --- */
-#tutorial-popup {
-    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    width: 320px; background: var(--glass-bg); backdrop-filter: blur(24px);
-    border: 1px solid var(--glass-border); border-radius: 24px;
-    padding: 24px; text-align: center; z-index: 2147483650;
-    color: #333; display: none;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-    animation: menuPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-#tutorial-popup h2 { margin-top: 0; font-size: 20px; margin-bottom: 12px; color: inherit; }
-#tutorial-popup p { font-size: 14px; opacity: 0.8; margin-bottom: 20px; line-height: 1.5; color: inherit; }
-#tutorial-popup ul { text-align: left; font-size: 13px; opacity: 0.9; padding-left: 20px; margin-bottom: 24px; line-height: 1.8; color: inherit; }
-#tutorial-popup button {
-    width: 100%; padding: 12px; background: var(--accent-color); color: white;
-    border: none; border-radius: 12px; font-weight: 600; cursor: pointer;
-    transition: transform 0.1s, opacity 0.2s;
-}
-#tutorial-popup button:hover { opacity: 0.9; }
-#tutorial-popup button:active { transform: scale(0.98); }
 
-.dark-mode #tutorial-popup { 
-    background: rgba(20, 20, 25, 0.95); 
-    border-color: rgba(255,255,255,0.08); 
-    color: white;
+/* --- NEW TUTORIAL STYLES --- */
+#tutorial-popup {
+    position: fixed;
+    /* Anchored to the dock (center-bottom) then moved up and right */
+    bottom: 50%; left: 50%;
+    /* transform: translate(X, Y). 
+       X: Move right to clear dock (approx 260px). 
+       Y: 60px moves it DOWN from the 50% mark, keeping it closer to the dock at 43% bottom. 
+    */
+    transform: translate(calc(-50% + 260px), 60px) scale(0.9);
+    width: 320px; /* Smaller width */
+    
+    /* Light Glassmorphism */
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 20px;
+    padding: 20px;
+    color: #1a1a1a; /* Dark Text */
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.9);
+    z-index: 2147483650;
+    opacity: 0; pointer-events: none;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
+#tutorial-popup.active {
+    opacity: 1; pointer-events: auto;
+    /* Active: 80px is slightly lower/settled look */
+    transform: translate(calc(-50% + 260px), 80px) scale(1);
+}
+
+/* Content Area */
+.tut-content-wrapper { width: 100%; text-align: center; height: 120px; }
+#tut-title { margin: 0 0 8px 0; font-size: 20px; font-weight: 700; color: #000; letter-spacing: -0.02em; }
+#tut-desc { margin: 0 0 16px 0; font-size: 14px; color: rgba(0,0,0,0.6); line-height: 1.4; }
+
+.tut-step-content { display: none; margin-top: 10px; animation: fadeIn 0.3s ease; }
+.tut-step-content.active { display: block; }
+.tut-step-content ul { text-align: left; padding-left: 20px; color: rgba(0,0,0,0.8); font-size: 13px; line-height: 1.6; }
+.tut-step-content p { font-size: 13px; margin-bottom: 4px; color: rgba(0,0,0,0.8); line-height: 1.5; }
+.tut-step-content li { margin-bottom: 6px; }
+
+/* Progress Indicator */
+.tut-progress-container {
+    position: relative;
+    display: inline-flex; /* Shrink to fit content */
+    align-items: center; justify-content: center;
+    margin-bottom: 16px; /* Increased margin for spacing */
+}
+.tut-track-dots {
+    display: flex; gap: 24px; /* Matches gap-6 */
+    position: relative; z-index: 10;
+}
+.tut-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(0, 0, 0, 0.15); /* Darker dots on light bg */
+    transition: background 0.3s;
+}
+.tut-dot.active-dot { background: white; }
+
+/* Green Pill Overlay */
+.tut-active-pill {
+    position: absolute;
+    left: -8px; top: 50%; transform: translateY(-50%);
+    height: 24px; /* Matches width of step 1 for perfect circle */
+    background: #22c55e; /* green-500 */
+    border-radius: 999px;
+    width: 24px; /* Start Step 1 */
+    transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); /* Spring-like */
+    z-index: 5;
+}
+
+/* Buttons */
+.tut-buttons {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; max-width: 320px; height: 48px; position: relative;
+}
+
+#tut-back-btn {
+    background: rgba(0,0,0,0.05); color: #333;
+    border: none; border-radius: 999px; font-weight: 600; font-size: 14px;
+    cursor: pointer; padding: 0 20px; height: 100%;
+    position: absolute; left: 0;
+    opacity: 0; transform: scale(0.8); pointer-events: none;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    width: 80px;
+}
+#tut-back-btn:hover { background: rgba(0,0,0,0.1); }
+#tut-back-btn.show { opacity: 1; transform: scale(1); pointer-events: auto; }
+
+#tut-next-btn {
+    background: #006cff; color: white;
+    border: none; border-radius: 999px; font-weight: 600; font-size: 14px;
+    cursor: pointer; height: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    margin-left: auto; width: 100%; /* Initially full width when no back button */
+}
+#tut-next-btn:active { transform: scale(0.96); }
+#tut-next-btn.shrink { width: 220px; } /* Shrink when back button shows */
+
+#tut-check-icon {
+    display: none; animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+#tut-check-icon svg { width: 16px; height: 16px; }
+
+@keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+
 `;
 
 // --- STATE ---
@@ -441,6 +495,7 @@ let userSession = null;
 let isSignUpMode = false;
 let activeContextMenuId = null;
 let draggedItem = null;
+let tutStep = 1; /* Tutorial Step State */
 
 // --- LISTENERS ---
 chrome.runtime.onMessage.addListener((request) => {
@@ -465,9 +520,9 @@ document.addEventListener('click', (e) => {
             menu.style.display = 'none';
 
         const dock = shadow.getElementById('dock-container');
-        const tutorial = shadow.getElementById('tutorial-popup');
+        const tut = shadow.getElementById('tutorial-popup');
 
-        if (dock && dock.classList.contains('active') && !path.includes(dock) && !path.includes(ctxMenu) && !path.includes(tutorial)) {
+        if (dock && dock.classList.contains('active') && !path.includes(dock) && !path.includes(ctxMenu) && !path.includes(tut)) {
             dock.classList.remove('active');
             dockHost.style.pointerEvents = "none";
         }
@@ -610,17 +665,11 @@ function setupUI(shadow) {
         }
     });
 
-    addListener('close-tutorial-btn', 'click', () => {
-        const tut = shadow.getElementById('tutorial-popup');
-        if (tut) tut.style.display = 'none';
-        chrome.storage.local.set({ tutorial_shown: true });
-    });
+    // --- TUTORIAL LISTENERS ---
+    addListener('tut-next-btn', 'click', () => nextTutorialStep(shadow));
+    addListener('tut-back-btn', 'click', () => prevTutorialStep(shadow));
 
-    // Slides (Translate -100% - 200px margin for gap)
-    addListener('tut-next-btn', 'click', () => {
-        const slider = shadow.querySelector('.tut-slider');
-        if (slider) slider.style.transform = 'translateX(calc(-100% - 200px))';
-    });
+
 
     // Horizontal Scroll Support
     const dockIcons = shadow.getElementById('dock-icons');
@@ -651,9 +700,7 @@ async function toggleDock() {
         // FIX: Hide the menu immediately when closing the dock
         if (menu) menu.style.display = 'none';
 
-        // Hide Tutorial when dock closes
-        const tut = shadow.getElementById('tutorial-popup');
-        if (tut) tut.style.display = 'none';
+
 
     } else {
         // --- OPENING THE DOCK ---
@@ -665,33 +712,18 @@ async function toggleDock() {
 
         if (userSession) loadBookmarks(dockHost.shadowRoot);
 
-        // Check for Tutorial with DELAY
+        // Check for Tutorial
         chrome.storage.local.get(['tutorial_shown'], (res) => {
-            // Force show for testing if needed, or check flag
-            // if (!res.tutorial_shown) { 
-            const tut = shadow.getElementById('tutorial-popup');
-            const dockRef = shadow.getElementById('dock-container');
-
-            if (tut && dockRef) {
-                // Wait for dock animation (300ms) + extra buffer
+            if (!res.tutorial_shown) {
                 setTimeout(() => {
-                    const rect = dockRef.getBoundingClientRect();
-
-                    tut.style.visibility = 'hidden';
-                    tut.style.display = 'block';
-
-                    // Position relative to viewport edges
-                    // Horizontal: Right aligned with right of dock
-                    const distFromRight = window.innerWidth - rect.right;
-
-                    tut.style.right = distFromRight + 'px';
-                    tut.style.left = 'auto';
-                    tut.style.top = 'auto';  // Reset
-
-                    tut.style.visibility = 'visible';
-                }, 1000); // 1 Second Delay
+                    const tut = shadow.getElementById('tutorial-popup');
+                    if (tut) {
+                        tut.classList.add('active');
+                        tutStep = 1;
+                        updateTutorialUI(shadow);
+                    }
+                }, 800);
             }
-            // }
         });
     }
 }
@@ -826,16 +858,13 @@ async function fetchThemeFromCloud(shadow) {
 // 3. Set Theme (UI + Local + Cloud)
 function setTheme(shadow, isDark, saveToDb = true) {
     const dock = shadow.getElementById('dock-container');
-    const tutorial = shadow.getElementById('tutorial-popup');
     if (!dock) return;
 
     if (isDark) {
         dock.classList.add('dark-mode');
-        if (tutorial) tutorial.classList.add('dark-mode');
         chrome.storage.local.set({ theme: 'dark' });
     } else {
         dock.classList.remove('dark-mode');
-        if (tutorial) tutorial.classList.remove('dark-mode');
         chrome.storage.local.set({ theme: 'light' });
     }
 
@@ -855,6 +884,79 @@ function loadTheme(shadow) {
         // Pass false so we don't spam the DB on every page load
         setTheme(shadow, isDark, false);
     });
+}
+
+
+// --- NEW TUTORIAL FNS ---
+function nextTutorialStep(shadow) {
+    if (tutStep < 3) {
+        tutStep++;
+        updateTutorialUI(shadow);
+    } else {
+        // FINISH
+        const tut = shadow.getElementById('tutorial-popup');
+        if (tut) tut.classList.remove('active');
+        chrome.storage.local.set({ tutorial_shown: true });
+    }
+}
+
+function prevTutorialStep(shadow) {
+    if (tutStep > 1) {
+        tutStep--;
+        updateTutorialUI(shadow);
+    }
+}
+
+function updateTutorialUI(shadow) {
+    // 1. Progress Pill Width
+    const pill = shadow.querySelector('.tut-active-pill');
+    if (pill) {
+        // Precise widths based on 8px dot, 24px gap, and 8px padding
+        if (tutStep === 1) pill.style.width = '24px';
+        else if (tutStep === 2) pill.style.width = '56px';
+        else if (tutStep === 3) pill.style.width = '88px';
+    }
+
+    // 2. Dots Active Class
+    const dots = shadow.querySelectorAll('.tut-dot');
+    dots.forEach(d => {
+        const idx = parseInt(d.dataset.index);
+        // In the design, the pill covers active dots, but we set them to white
+        // underneath just in case or for z-index layering if needed.
+        if (idx <= tutStep) d.classList.add('active-dot');
+        else d.classList.remove('active-dot');
+    });
+
+    // 3. Content Visibility
+    const steps = shadow.querySelectorAll('.tut-step-content');
+    steps.forEach(s => {
+        if (parseInt(s.dataset.step) === tutStep) s.classList.add('active');
+        else s.classList.remove('active');
+    });
+
+    // 4. Buttons State
+    const backBtn = shadow.getElementById('tut-back-btn');
+    const nextBtn = shadow.getElementById('tut-next-btn');
+    const btnText = shadow.getElementById('tut-btn-text');
+    const checkIcon = shadow.getElementById('tut-check-icon');
+
+    if (tutStep === 1) {
+        backBtn.classList.remove('show');
+        nextBtn.classList.remove('shrink');
+        btnText.innerText = "Continue";
+        checkIcon.style.display = 'none';
+    } else {
+        backBtn.classList.add('show');
+        nextBtn.classList.add('shrink');
+
+        if (tutStep === 3) {
+            btnText.innerText = "Finish";
+            checkIcon.style.display = 'block';
+        } else {
+            btnText.innerText = "Continue";
+            checkIcon.style.display = 'none';
+        }
+    }
 }
 
 

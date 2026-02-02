@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QuickDock",
-  "version": "7.0",
+  "version": "2.0",
   "description": "The perfect extension to save and organize your favorite links quickly.",
   "permissions": [
     "activeTab",
@@ -52,8 +52,8 @@
   "commands": {
     "toggle-dock": {
       "suggested_key": {
-        "default": "Alt+W",
-        "mac": "Alt+W"
+        "default": "Alt+Q",
+        "mac": "Alt+Q"
       },
       "description": "Toggle Dock"
     },
