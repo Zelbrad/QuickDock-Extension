@@ -12,7 +12,7 @@
     "https://*.supabase.co/*"
   ],
   "action": {
-    "default_title": "Open QuickQuick",
+    "default_title": "Open QuickDock",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
