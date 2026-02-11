@@ -123,9 +123,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             body: body ? JSON.stringify(body) : null
         })
             .then(async (res) => {
-                const data = await res.json();
-                if (res.ok) sendResponse({ success: true, data });
-                else sendResponse({ success: false, error: data.msg || data.error_description || "API Error" });
+                if (res.status === 204) {
+                    sendResponse({ success: true, data: null });
+                    return;
+                }
+                const text = await res.text();
+                try {
+                    const data = text ? JSON.parse(text) : null;
+                    if (res.ok) sendResponse({ success: true, data });
+                    else sendResponse({ success: false, error: data ? (data.message || data.error || data) : "API Error" });
+                } catch (e) {
+                    sendResponse({ success: false, error: "JSON Parse Error" });
+                }
             })
             .catch((err) => sendResponse({ success: false, error: err.message }));
 
