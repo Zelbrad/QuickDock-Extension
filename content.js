@@ -49,7 +49,12 @@ const UI_HTML = `
                     </span>
                 </label>
             </div>
-            <button id="logout-btn">Log Out</button>
+            <div class="user-actions">
+                <button id="logout-btn">Log Out</button>
+                <a id="kofi-btn" href="https://ko-fi.com/gperpas" target="_blank" title="Support me on Ko-fi">
+                    <img src="https://storage.ko-fi.com/cdn/cup-border.png" alt="Ko-fi">
+                </a>
+            </div>
         </div>
         </div>
     </div>
@@ -117,7 +122,7 @@ const UI_HTML = `
         <div class="color-dot" style="background:rgba(72, 219, 251, 0.8)" data-color="rgba(72, 219, 251, 0.45)"></div>
         <div class="color-dot" style="background:rgba(95, 39, 205, 0.7)" data-color="rgba(95, 39, 205, 0.45)"></div>
         <div class="color-dot" style="background:rgba(253, 167, 223, 0.8)" data-color="rgba(253, 167, 223, 0.45)"></div>
-        <div class="color-dot" style="background:rgba(255, 255, 255, 0.6)" data-color="rgba(255, 255, 255, 0.25)"></div>
+        <div class="color-dot" style="background:rgba(200, 200, 200, 0.8)" data-color="rgba(200, 200, 200, 0.4)"></div>
     </div>
 </div>
 
@@ -243,6 +248,7 @@ const UI_CSS = `
 }
 
 /* Expanded State */
+/* Expanded State */
 .dock-folder.expanded {
     /* Remove !important so inline style color wins. Fallback if no inline style. */
     background: rgba(255, 255, 255, 0.15); 
@@ -254,15 +260,17 @@ const UI_CSS = `
     padding: 4px 3px !important; /* Reduced side padding: vertical 4px, horizontal 3px */
     gap: 10px;
     margin: 0 8px; /* Add horizontal margin to create space and prevent overlap */
-    /* Height: icon-size / 1.15 to match internal icons, so when scaled 1.15x it appears same as dock height */
-    height: calc(var(--icon-size) / 1.15); 
+    
+    /* FIX: Use border-box and exact icon size to prevent layout growth */
+    height: var(--icon-size); 
+    box-sizing: border-box; /* Include padding/border in height */
+    
     border: 1px solid rgba(255,255,255,0.1);
     z-index: 1000 !important; 
     position: relative; 
-    box-sizing: content-box; /* Use content-box so padding adds to width, ensuring space exists */
     border-radius: 18px; /* Smooth corner transition */
     transform: scale(1.15); /* Keep same scale as closed so it doesn't shrink */
-    /* box-shadow: 0 4px 10px rgba(0,0,0,0.1); REMOVED AS REQUESTED */
+    /* box-shadow removed */
 }
 
 .dock-folder.folder-hover-target {
@@ -702,7 +710,29 @@ input:checked + .slider .icon-moon { opacity: 1; transform: scale(1.3); color: w
 @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
+/* User Actions: Logout & Ko-fi */
+.user-actions {
+    display: flex; gap: 8px; width: 100%;
+    margin-top: 6px; /* Reduced gap */
+}
+#logout-btn {
+    flex: 1;
+    width: auto !important; margin: 0 !important;
+    height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--accent-color) !important; color: white !important;
+}
+#logout-btn:hover { opacity: 0.9; }
 
+#kofi-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 44px; height: 36px; /* Matches logout height */
+    background: #FF5E5B; /* Ko-fi Heart Red */
+    border-radius: 10px;
+    transition: all 0.2s;
+}
+#kofi-btn:hover { background: #dd4b48; }
+#kofi-btn img { height: 20px; width: auto; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2)); }
 `;
 
 // --- STATE ---
@@ -1675,13 +1705,23 @@ async function createFolder(targetItem, draggedItem) {
 
     if (!id1 || !id2) return;
 
+    // Calculate Target Index (visual position)
+    let targetIndex = 0;
+    const container = targetItem.parentNode;
+    if (container) {
+        const dockItems = Array.from(container.children).filter(el => el.classList.contains('dock-item'));
+        const idx = dockItems.indexOf(targetItem);
+        if (idx !== -1) targetIndex = idx;
+    }
+
     try {
         // 1. Create New Folder Row
         const res = await supabaseCall('/rest/v1/bookmarks', 'POST', {
             title: "Folder",
             is_folder: true,
             user_id: userSession.user.id,
-            description: "rgba(200, 200, 200, 0.4)"
+            description: "rgba(200, 200, 200, 0.4)",
+            order_index: targetIndex
         }, userSession.access_token, { "Prefer": "return=representation" });
 
         let folderId = null;
